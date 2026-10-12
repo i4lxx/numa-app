@@ -8,6 +8,7 @@
     "scheme": "numaapp",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.numasapp.numaapp",
       "icon": "./assets/expo.icon"
     },
     "android": {
@@ -17,7 +18,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.numasapp.numaapp"
     },
     "web": {
       "output": "static",
@@ -32,11 +34,47 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "color": "#5B8DEF"
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Numa necesita acceso a tu calendario para agendar tus eventos y citas.",
+          "remindersPermission": "Numa necesita acceso a tus recordatorios para crear recordatorios por ti."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Numa necesita acceso a tus fotos para que puedas adjuntar imágenes.",
+          "cameraPermission": "Numa necesita acceso a la cámara para que puedas tomar fotos."
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d61f299e-88c5-4502-9951-d48ef8d2f398"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d61f299e-88c5-4502-9951-d48ef8d2f398",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     }
   }
 }
