@@ -23,7 +23,7 @@ jobs:
         run: npm ci
 
       - name: Generar el proyecto nativo de iOS
-        run: npx expo prebuild --platform ios --no-install
+        run: npx expo prebuild --platform ios
         env:
           CI: "1"
 
