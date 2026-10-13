@@ -12,8 +12,13 @@ import {
   View,
 } from "react-native";
 import { clasificarMensaje, DatosEvento } from "../api/ia";
-import { actualizarNotificacionCita, agregarCita, obtenerPerfil } from "../db/database";
-import { cancelarNotificacion, programarNotificacion } from "../notificaciones";
+import {
+  actualizarEventoCalendarioCita,
+  actualizarNotificacionCita,
+  agregarCita,
+  obtenerPerfil,
+} from "../db/database";
+import { programarRecordatoriosCita } from "../notificaciones";
 import { crearEventoCalendario } from "../calendario";
 import { registrarEvento } from "../analytics";
 import Ayuda from "../components/Ayuda";
@@ -129,8 +134,8 @@ export default function ChatScreen() {
 
         const fechaHora = new Date(`${datos.fecha}T${datos.hora || "09:00"}:00`);
 
-        const notifId = await programarNotificacion(
-          "📅 Recordatorio",
+        // Avisos: 12 h antes, 1 h antes y a la hora
+        const notifId = await programarRecordatoriosCita(
           datos.titulo || "Recordatorio",
           fechaHora
         );
@@ -139,7 +144,8 @@ export default function ChatScreen() {
           registrarEvento("notificacion_programada", { tipo: "cita_chat" });
         }
 
-        await crearEventoCalendario(datos.titulo || "Recordatorio", fechaHora, notas);
+        const eventoId = await crearEventoCalendario(datos.titulo || "Recordatorio", fechaHora, notas);
+        if (eventoId) await actualizarEventoCalendarioCita(idCita, eventoId);
       }
 
       registrarEvento("chat_evento_confirmado", { categoria: datos.categoria });

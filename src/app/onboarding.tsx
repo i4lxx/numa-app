@@ -61,6 +61,7 @@ const TIPOS_USUARIO: { valor: TipoUsuario; emoji: string; titulo: string; detall
   { valor: "estudiante", emoji: "🎓", titulo: "Estudiante", detalle: "Estudio y organizo mis tiempos" },
   { valor: "adulto", emoji: "🧑", titulo: "Adulto", detalle: "Trabajo y llevo mi día a día" },
   { valor: "adulto_mayor", emoji: "👴", titulo: "Adulto mayor", detalle: "Quiero tener mi salud al día" },
+  { valor: "cuidador", emoji: "🤝", titulo: "Cuidador", detalle: "Administro la salud de otra persona" },
 ];
 
 export default function OnboardingScreen() {

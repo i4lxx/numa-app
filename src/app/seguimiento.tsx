@@ -8,7 +8,7 @@ import {
   registrarToma,
   ultimaTomaDe,
 } from "../db/database";
-import { cancelarNotificacion, programarNotificacion } from "../notificaciones";
+import { cancelarNotificacion, programarMedicamento } from "../notificaciones";
 import { registrarEvento } from "../analytics";
 import Ayuda from "../components/Ayuda";
 
@@ -45,14 +45,18 @@ export default function SeguimientoScreen() {
   );
 
   async function handleTomado(med: Fila) {
-    await registrarToma(med.id, med.nombre);
+    await registrarToma(
+      med.id,
+      med.persona_nombre ? `${med.nombre} (${med.persona_nombre})` : med.nombre
+    );
 
     // Cancela el aviso pendiente y programa el de la siguiente dosis
     await cancelarNotificacion(med.notification_id);
     const proximaToma = new Date(Date.now() + med.frecuencia_horas * 60 * 60 * 1000);
-    const notifId = await programarNotificacion(
-      "💊 Hora de tu medicamento",
-      `${med.nombre}${med.dosis ? ` (${med.dosis})` : ""}`,
+    const notifId = await programarMedicamento(
+      med.nombre,
+      med.dosis,
+      med.persona_nombre,
       proximaToma
     );
     await actualizarNotificacionMedicamento(med.id, notifId);
@@ -83,6 +87,9 @@ export default function SeguimientoScreen() {
           <View style={styles.card}>
             <View style={{ flex: 1 }}>
               <Text style={styles.nombre}>💊 {item.nombre}</Text>
+              {item.persona_nombre ? (
+                <Text style={styles.persona}>👤 {item.persona_nombre}</Text>
+              ) : null}
               <Text style={styles.detalle}>
                 {item.dosis ? `${item.dosis} · ` : ""}cada {item.frecuencia_horas}h
               </Text>
@@ -115,6 +122,7 @@ const styles = StyleSheet.create({
   },
   nombre: { fontSize: 16, fontWeight: "600", color: "#222" },
   detalle: { fontSize: 15, color: "#333", marginTop: 2 },
+  persona: { fontSize: 13, color: "#5B8DEF", fontWeight: "600", marginTop: 2 },
   ultima: { fontSize: 12, color: "#B07CD8", marginTop: 4 },
   tomarButton: {
     backgroundColor: "#4CAF93",

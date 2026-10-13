@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   Cita,
@@ -9,6 +9,7 @@ import {
   obtenerPerfil,
 } from "../db/database";
 import { registrarEvento } from "../analytics";
+import { activarAdmin, esAdmin } from "../admin";
 import Ayuda from "../components/Ayuda";
 
 const MENU_ITEMS = [
@@ -21,12 +22,18 @@ const MENU_ITEMS = [
   { label: "Ajustes", emoji: "⚙️", color: "#999999", route: "/ajustes" },
 ];
 
+const ITEM_PERSONAS = { label: "Personas\na cargo", emoji: "👥", color: "#6C63FF", route: "/personas" };
+const ITEM_ADMIN = { label: "Modo\nadministrador", emoji: "🧪", color: "#333333", route: "/admin" };
+
 export default function HomeScreen() {
   const router = useRouter();
   const [nombre, setNombre] = useState<string | null>(null);
   const [medicamentos, setMedicamentos] = useState<Medicamento[]>([]);
   const [citasHoy, setCitasHoy] = useState<Cita[]>([]);
   const [listo, setListo] = useState(false);
+  const [verPersonas, setVerPersonas] = useState(false);
+  const [admin, setAdmin] = useState(false);
+  const [toques, setToques] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -37,6 +44,8 @@ export default function HomeScreen() {
           return;
         }
         setNombre(perfil.nombre);
+        setVerPersonas(perfil.tipo_usuario === "cuidador");
+        setAdmin(await esAdmin());
         setMedicamentos(await listarMedicamentos());
         setCitasHoy(await listarCitasDeHoy());
         setListo(true);
@@ -47,6 +56,26 @@ export default function HomeScreen() {
 
   if (!listo) return <View style={styles.container} />;
 
+  // Truco para ti: toca 7 veces el título "Numa" para activar el modo administrador
+  async function handleToqueTitulo() {
+    const n = toques + 1;
+    if (n >= 7) {
+      setToques(0);
+      await activarAdmin(true);
+      setAdmin(true);
+      Alert.alert("🧪 Modo administrador", "Activado. Ahora ves la tarjeta de pruebas en el menú.");
+    } else {
+      setToques(n);
+    }
+  }
+
+  const items = [
+    ...MENU_ITEMS.slice(0, 6),
+    ...(verPersonas ? [ITEM_PERSONAS] : []),
+    MENU_ITEMS[6],
+    ...(admin ? [ITEM_ADMIN] : []),
+  ];
+
   const sinPendientes = medicamentos.length === 0 && citasHoy.length === 0;
 
   return (
@@ -56,7 +85,9 @@ export default function HomeScreen() {
         titulo="👋 Bienvenido a Numa"
         texto="Aquí ves de un vistazo lo que tienes pendiente hoy (medicamentos y citas). Abajo, cada tarjeta te lleva a una función distinta: chatea con Numa, administra medicamentos, agrega citas, escanea recetas, da seguimiento o consulta tu historial."
       />
-      <Text style={styles.title}>Numa</Text>
+      <Pressable onPress={handleToqueTitulo}>
+        <Text style={styles.title}>Numa</Text>
+      </Pressable>
       <Text style={styles.greeting}>
         Hola {nombre}, bienvenido{"\n"}¿Cómo puedo ayudarte hoy?
       </Text>
@@ -71,6 +102,7 @@ export default function HomeScreen() {
               <View key={`med-${m.id}`} style={styles.todayRow}>
                 <Text style={styles.todayIcon}>💊</Text>
                 <Text style={styles.todayText}>
+                  {m.persona_nombre ? `${m.persona_nombre}: ` : ""}
                   {m.nombre}
                   {m.dosis ? ` (${m.dosis})` : ""} — cada {m.frecuencia_horas}h
                 </Text>
@@ -80,6 +112,7 @@ export default function HomeScreen() {
               <View key={`cita-${c.id}`} style={styles.todayRow}>
                 <Text style={styles.todayIcon}>📅</Text>
                 <Text style={styles.todayText}>
+                  {c.persona_nombre ? `${c.persona_nombre}: ` : ""}
                   {c.titulo}
                   {c.hora ? ` — ${c.hora}` : ""}
                 </Text>
@@ -90,7 +123,7 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.grid}>
-        {MENU_ITEMS.map((item) => (
+        {items.map((item) => (
           <Pressable
             key={item.label}
             style={[styles.card, { backgroundColor: item.color }]}

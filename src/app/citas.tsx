@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import {
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -15,21 +16,28 @@ import {
   Cita,
   eliminarCita,
   listarCitas,
+  listarPersonas,
+  Persona,
 } from "../db/database";
-import { cancelarNotificacion, programarNotificacion } from "../notificaciones";
+import { cancelarNotificacion, programarRecordatoriosCita } from "../notificaciones";
 import { crearEventoCalendario, eliminarEventoCalendario } from "../calendario";
 import { registrarEvento } from "../analytics";
 import Ayuda from "../components/Ayuda";
+import SelectorFechaHora from "../components/SelectorFechaHora";
+import SelectorPersona from "../components/SelectorPersona";
 
 export default function CitasScreen() {
   const [citas, setCitas] = useState<Cita[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [personaId, setPersonaId] = useState<number | null>(null);
   const [titulo, setTitulo] = useState("");
-  const [fecha, setFecha] = useState(""); // YYYY-MM-DD
+  const [fecha, setFecha] = useState(""); // AAAA-MM-DD
   const [hora, setHora] = useState(""); // HH:MM
   const [notas, setNotas] = useState("");
 
   const cargar = useCallback(async () => {
     setCitas(await listarCitas());
+    setPersonas(await listarPersonas());
   }, []);
 
   useFocusEffect(
@@ -39,29 +47,30 @@ export default function CitasScreen() {
   );
 
   async function handleAgregar() {
-    if (!titulo.trim() || !fecha.trim()) return;
-
-    const id = await agregarCita(titulo.trim(), fecha.trim(), hora.trim(), notas.trim());
-
-    if (fecha.trim()) {
-      const fechaHora = new Date(`${fecha.trim()}T${hora.trim() || "09:00"}:00`);
-      const notifId = await programarNotificacion(
-        "📅 Cita próxima",
-        `${titulo.trim()}${hora.trim() ? ` a las ${hora.trim()}` : ""}`,
-        fechaHora
-      );
-      if (notifId) {
-        await actualizarNotificacionCita(id, notifId);
-        registrarEvento("notificacion_programada", { tipo: "cita" });
-      }
-
-      const eventoId = await crearEventoCalendario(
-        titulo.trim(),
-        fechaHora,
-        notas.trim() || undefined
-      );
-      if (eventoId) await actualizarEventoCalendarioCita(id, eventoId);
+    if (!titulo.trim() || !fecha) {
+      Alert.alert("Falta información", "Escribe el título y elige la fecha.");
+      return;
     }
+
+    const horaFinal = hora || "09:00";
+    const persona = personas.find((p) => p.id === personaId) || null;
+    const id = await agregarCita(titulo.trim(), fecha, hora, notas.trim(), personaId);
+    const fechaHora = new Date(`${fecha}T${horaFinal}:00`);
+
+    // Avisos: 12 h antes, 1 h antes y a la hora de la cita
+    const ids = await programarRecordatoriosCita(titulo.trim(), fechaHora, persona?.nombre);
+    if (ids) {
+      await actualizarNotificacionCita(id, ids);
+      registrarEvento("notificacion_programada", { tipo: "cita" });
+    }
+
+    // Evento en el calendario del celular (iPhone: app Calendario / iCloud)
+    const eventoId = await crearEventoCalendario(
+      persona ? `${persona.nombre}: ${titulo.trim()}` : titulo.trim(),
+      fechaHora,
+      notas.trim() || undefined
+    );
+    if (eventoId) await actualizarEventoCalendarioCita(id, eventoId);
 
     registrarEvento("cita_agregada");
     setTitulo("");
@@ -78,54 +87,48 @@ export default function CitasScreen() {
     cargar();
   }
 
+  const formulario = (
+    <View style={styles.form}>
+      <SelectorPersona personas={personas} valor={personaId} onChange={setPersonaId} />
+      <TextInput
+        style={styles.input}
+        placeholder="Título (ej. Dr. Ramírez)"
+        placeholderTextColor="#666"
+        value={titulo}
+        onChangeText={setTitulo}
+      />
+      <SelectorFechaHora modo="fecha" valor={fecha} onChange={setFecha} placeholder="Elegir fecha" />
+      <SelectorFechaHora modo="hora" valor={hora} onChange={setHora} placeholder="Elegir hora" />
+      <TextInput
+        style={styles.input}
+        placeholder="Notas (opcional)"
+        placeholderTextColor="#666"
+        value={notas}
+        onChangeText={setNotas}
+      />
+      <Pressable style={styles.addButton} onPress={handleAgregar}>
+        <Text style={styles.addButtonText}>+ Agregar cita</Text>
+      </Pressable>
+      <Text style={styles.nota}>
+        Numa te avisa 12 horas antes, 1 hora antes y a la hora de la cita.
+      </Text>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <Ayuda
         screenKey="citas"
         titulo="📅 Citas"
-        texto="Agrega tus citas con título, fecha y hora. Numa te manda un aviso antes de que llegue, y también la agrega a tu calendario del celular automáticamente."
+        texto="Agrega tus citas eligiendo la fecha en el calendario y la hora en el reloj. Numa te avisa 12 horas antes, 1 hora antes y a la hora de la cita, y también la agrega a tu calendario del celular."
       />
-      <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          placeholder="Título (ej. Dr. Ramírez)"
-          placeholderTextColor="#666"
-          value={titulo}
-          onChangeText={setTitulo}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Fecha (AAAA-MM-DD, ej. 2026-09-15)"
-          placeholderTextColor="#666"
-          value={fecha}
-          onChangeText={setFecha}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Hora (HH:MM, ej. 17:30)"
-          placeholderTextColor="#666"
-          value={hora}
-          onChangeText={setHora}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Notas (opcional)"
-          placeholderTextColor="#666"
-          value={notas}
-          onChangeText={setNotas}
-        />
-        <Pressable style={styles.addButton} onPress={handleAgregar}>
-          <Text style={styles.addButtonText}>+ Agregar cita</Text>
-        </Pressable>
-      </View>
-
       <FlatList
         data={citas}
         keyExtractor={(item) => String(item.id)}
-        style={styles.list}
-        ListEmptyComponent={
-          <Text style={styles.empty}>Aún no tienes citas guardadas</Text>
-        }
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={formulario}
+        ListEmptyComponent={<Text style={styles.empty}>Aún no tienes citas guardadas</Text>}
+        contentContainerStyle={{ paddingBottom: 40 }}
         renderItem={({ item }) => (
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
@@ -133,6 +136,9 @@ export default function CitasScreen() {
               <Text style={styles.rowSubtitle}>
                 {item.fecha} {item.hora ? `· ${item.hora}` : ""}
               </Text>
+              {item.persona_nombre ? (
+                <Text style={styles.rowPersona}>👤 {item.persona_nombre}</Text>
+              ) : null}
             </View>
             <Pressable onPress={() => handleEliminar(item)}>
               <Text style={styles.deleteText}>Eliminar</Text>
@@ -164,7 +170,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addButtonText: { color: "#fff", fontWeight: "700", fontSize: 15 },
-  list: { flex: 1 },
+  nota: { color: "#333", fontSize: 13, textAlign: "center", marginTop: 10 },
   empty: { textAlign: "center", color: "#222", marginTop: 20, fontSize: 16 },
   row: {
     backgroundColor: "#fff",
@@ -176,5 +182,6 @@ const styles = StyleSheet.create({
   },
   rowTitle: { fontSize: 16, fontWeight: "600", color: "#222" },
   rowSubtitle: { fontSize: 15, color: "#333", marginTop: 2 },
+  rowPersona: { fontSize: 13, color: "#5B8DEF", marginTop: 3, fontWeight: "600" },
   deleteText: { color: "#E0708A", fontWeight: "600", fontSize: 13 },
 });

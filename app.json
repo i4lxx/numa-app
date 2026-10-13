@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "numa-app",
+    "name": "Numa",
     "slug": "numa-app",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "numaapp",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.numasapp.numaapp",
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#F4F6F8",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -30,9 +30,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#F4F6F8",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 200
         }
       ],
       "expo-sqlite",
@@ -55,7 +55,8 @@
           "photosPermission": "Numa necesita acceso a tus fotos para que puedas adjuntar imágenes.",
           "cameraPermission": "Numa necesita acceso a la cámara para que puedas tomar fotos."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -73,7 +74,7 @@
     "updates": {
       "url": "https://u.expo.dev/d61f299e-88c5-4502-9951-d48ef8d2f398",
       "requestHeaders": {
-        "expo-channel-name": "production"
+        "expo-channel-name": "ios"
       }
     }
   }
