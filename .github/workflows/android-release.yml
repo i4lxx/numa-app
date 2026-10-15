@@ -1,0 +1,65 @@
+# Publica una nueva versión de Numa para Android.
+# Se lanza a mano desde la pestaña Actions → "Publicar APK de Android" → Run workflow.
+# Compila el APK en EAS (con la misma firma de siempre) y lo publica en GitHub Releases
+# como Numa.apk. La página web siempre descarga el Release más reciente.
+name: Publicar APK de Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Número de versión (por ejemplo 1.1.0)"
+        required: true
+      notas:
+        description: "Qué cambió en esta versión"
+        required: false
+        default: "Mejoras y correcciones."
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Preparar EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Compilar el APK en EAS
+        run: |
+          eas build --platform android --profile preview --non-interactive --wait --json > build.json
+          URL=$(node -e "const b=require('./build.json'); const x=Array.isArray(b)?b[0]:b; console.log(x.artifacts.buildUrl || x.artifacts.applicationArchiveUrl)")
+          echo "APK listo en: $URL"
+          curl -L --fail --retry 3 -o Numa.apk "$URL"
+          ls -lh Numa.apk
+
+      - name: Publicar en GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          NOTAS: ${{ inputs.notas }}
+        run: |
+          gh release create "v${VERSION}" Numa.apk \
+            --title "Numa ${VERSION}" \
+            --notes "${NOTAS}" \
+            --latest
