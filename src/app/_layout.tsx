@@ -55,6 +55,7 @@ export default function RootLayout() {
         <Stack.Screen name="historial" options={{ title: "Historial" }} />
         <Stack.Screen name="personas" options={{ title: "Personas a cargo" }} />
         <Stack.Screen name="ajustes" options={{ title: "Ajustes" }} />
+        <Stack.Screen name="legal" options={{ title: "Términos y privacidad" }} />
         <Stack.Screen name="admin" options={{ title: "Modo administrador" }} />
       </Stack>
     </ThemeProvider>

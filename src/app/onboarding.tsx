@@ -128,6 +128,14 @@ export default function OnboardingScreen() {
         >
           <Text style={styles.buttonText}>Continuar</Text>
         </Pressable>
+
+        <Pressable onPress={() => router.push("/legal")}>
+          <Text style={styles.legalAviso}>
+            Al continuar aceptas los{" "}
+            <Text style={styles.legalEnlace}>Términos y la Política de privacidad</Text>. Numa es un
+            proyecto estudiantil en desarrollo.
+          </Text>
+        </Pressable>
       </KeyboardAvoidingView>
     );
   }
@@ -297,6 +305,8 @@ const styles = StyleSheet.create({
   buttonDisabled: { backgroundColor: "#C7D6F5" },
   buttonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   skip: { color: "#999", fontSize: 14, textAlign: "center", marginBottom: 20 },
+  legalAviso: { fontSize: 13, color: "#4D525B", textAlign: "center", lineHeight: 19, paddingHorizontal: 10 },
+  legalEnlace: { color: "#5B8DEF", fontWeight: "700" },
 
   opcion: {
     width: "100%",

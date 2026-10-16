@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   cambiarTipoUsuario,
   guardarApiKey,
@@ -30,6 +30,7 @@ const TIPOS: { valor: TipoUsuario; etiqueta: string }[] = [
 ];
 
 export default function AjustesScreen() {
+  const router = useRouter();
   const [apiKey, setApiKey] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [voz, setVoz] = useState(false);
@@ -133,6 +134,10 @@ export default function AjustesScreen() {
 
       <Pressable onPress={() => Linking.openURL("https://openrouter.ai/keys")}>
         <Text style={styles.link}>Abrir openrouter.ai/keys →</Text>
+      </Pressable>
+
+      <Pressable onPress={() => router.push("/legal")}>
+        <Text style={[styles.link, { marginTop: 22 }]}>📄 Términos y privacidad</Text>
       </Pressable>
 
       <Pressable style={styles.updateButton} onPress={() => revisarActualizaciones(false)}>
