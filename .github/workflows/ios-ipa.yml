@@ -1,0 +1,73 @@
+# Compila Numa para iPhone en una Mac de GitHub y entrega un .ipa SIN firmar.
+# Después se firma e instala desde Fedora con iloader y tu Apple ID gratuito.
+#
+# Cómo usarlo: en GitHub → pestaña Actions → "iOS IPA sin firmar" → Run workflow.
+# Al terminar (~20-30 min), descarga "Numa-ipa" en la parte de abajo de la ejecución.
+
+name: iOS IPA sin firmar
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Generar el proyecto nativo de iOS
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Quitar permiso de notificaciones push (un Apple ID gratis no lo permite)
+        # Numa solo usa notificaciones LOCALES, que siguen funcionando sin este permiso.
+        run: |
+          for f in ios/*/*.entitlements; do
+            echo "Revisando $f"
+            /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$f" || true
+          done
+
+      - name: Instalar pods
+        run: cd ios && pod install
+
+      - name: Compilar sin firmar
+        run: |
+          cd ios
+          WS=$(ls -d *.xcworkspace | head -1)
+          SCHEME="${WS%.xcworkspace}"
+          echo "Workspace: $WS  Scheme: $SCHEME"
+          xcodebuild \
+            -workspace "$WS" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | tail -n 200
+
+      - name: Empaquetar el .ipa
+        run: |
+          APP=$(find ios/build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          if [ -z "$APP" ]; then echo "No se encontró la app compilada"; exit 1; fi
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry Numa-sin-firmar.ipa Payload
+          ls -lh Numa-sin-firmar.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Numa-ipa
+          path: Numa-sin-firmar.ipa
+          retention-days: 14
