@@ -12,13 +12,8 @@ import {
   View,
 } from "react-native";
 import { clasificarMensaje, DatosEvento } from "../api/ia";
-import {
-  actualizarEventoCalendarioCita,
-  actualizarNotificacionCita,
-  agregarCita,
-  obtenerPerfil,
-} from "../db/database";
-import { programarRecordatoriosCita } from "../notificaciones";
+import { actualizarNotificacionCita, agregarCita, obtenerPerfil } from "../db/database";
+import { cancelarNotificacion, programarNotificacion } from "../notificaciones";
 import { crearEventoCalendario } from "../calendario";
 import { registrarEvento } from "../analytics";
 import Ayuda from "../components/Ayuda";
@@ -70,17 +65,9 @@ export default function ChatScreen() {
     registrarEvento("chat_mensaje_enviado");
 
     try {
+      // La clave de OpenRouter ya es opcional: primero se usa el modo rápido (Gemini)
       const perfil = await obtenerPerfil();
-      if (!perfil?.openrouter_api_key) {
-        agregarMensaje({
-          id: idUnico(),
-          autor: "numa",
-          texto: "Antes de que pueda ayudarte, ve a Ajustes y agrega tu clave gratuita de OpenRouter.",
-        });
-        setCargando(false);
-        return;
-      }
-      const datos = await clasificarMensaje(textoUsuario, perfil.openrouter_api_key);
+      const datos = await clasificarMensaje(textoUsuario, perfil?.openrouter_api_key);
 
       if (datos.categoria === "otro") {
         // No es algo para agendar: le preguntamos a Numa de verdad (Gemini)
@@ -134,8 +121,8 @@ export default function ChatScreen() {
 
         const fechaHora = new Date(`${datos.fecha}T${datos.hora || "09:00"}:00`);
 
-        // Avisos: 12 h antes, 1 h antes y a la hora
-        const notifId = await programarRecordatoriosCita(
+        const notifId = await programarNotificacion(
+          "📅 Recordatorio",
           datos.titulo || "Recordatorio",
           fechaHora
         );
@@ -144,8 +131,7 @@ export default function ChatScreen() {
           registrarEvento("notificacion_programada", { tipo: "cita_chat" });
         }
 
-        const eventoId = await crearEventoCalendario(datos.titulo || "Recordatorio", fechaHora, notas);
-        if (eventoId) await actualizarEventoCalendarioCita(idCita, eventoId);
+        await crearEventoCalendario(datos.titulo || "Recordatorio", fechaHora, notas);
       }
 
       registrarEvento("chat_evento_confirmado", { categoria: datos.categoria });

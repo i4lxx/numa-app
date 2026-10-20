@@ -22,6 +22,7 @@ export default function EscanearScreen() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [resultado, setResultado] = useState<DatosReceta | null>(null);
+  const [segundos, setSegundos] = useState<number | null>(null);
 
   async function elegirFoto(desdeCamara: boolean) {
     const permiso = desdeCamara
@@ -33,33 +34,31 @@ export default function EscanearScreen() {
       return;
     }
 
+    // Calidad 0.5: la foto pesa menos y se sube más rápido, y la letra se sigue leyendo bien
     const resultadoPicker = desdeCamara
-      ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.6 })
-      : await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.6 });
+      ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.5 })
+      : await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.5 });
 
     if (resultadoPicker.canceled) return;
 
     const asset = resultadoPicker.assets[0];
     setFotoUri(asset.uri);
     setResultado(null);
+    setSegundos(null);
 
     if (!asset.base64) {
       Alert.alert("Error", "No se pudo leer la imagen, intenta de nuevo.");
       return;
     }
 
+    // La clave de OpenRouter ya es opcional: solo se usa si el modo rápido (Gemini) falla
     const perfil = await obtenerPerfil();
-    if (!perfil?.openrouter_api_key) {
-      Alert.alert(
-        "Falta tu clave de OpenRouter",
-        "Ve a Ajustes y agrégala para poder leer recetas."
-      );
-      return;
-    }
 
     setCargando(true);
+    const inicio = Date.now();
     try {
-      const datos = await leerRecetaFoto(asset.base64, perfil.openrouter_api_key);
+      const datos = await leerRecetaFoto(asset.base64, perfil?.openrouter_api_key);
+      setSegundos((Date.now() - inicio) / 1000);
       if (!datos.es_receta || !datos.medicamentos?.length) {
         Alert.alert(
           "No se detectó receta",
@@ -98,6 +97,7 @@ export default function EscanearScreen() {
   function handleCancelar() {
     setFotoUri(null);
     setResultado(null);
+    setSegundos(null);
   }
 
   return (
@@ -132,6 +132,9 @@ export default function EscanearScreen() {
       {resultado && !cargando && (
         <View style={styles.resultBox}>
           <Text style={styles.resultTitle}>Esto detecté:</Text>
+          {segundos !== null && (
+            <Text style={styles.tiempo}>⚡ Leída en {segundos.toFixed(1)} s</Text>
+          )}
           {resultado.medicamentos.map((m: MedicamentoDetectado, i: number) => (
             <View key={i} style={styles.medRow}>
               <Text style={styles.medNombre}>💊 {m.nombre}</Text>
@@ -200,7 +203,8 @@ const styles = StyleSheet.create({
     padding: 16,
     marginTop: 10,
   },
-  resultTitle: { fontSize: 16, fontWeight: "700", marginBottom: 10, color: "#222" },
+  resultTitle: { fontSize: 16, fontWeight: "700", marginBottom: 4, color: "#222" },
+  tiempo: { fontSize: 13, fontWeight: "600", color: "#4CAF93", marginBottom: 10 },
   medRow: { marginBottom: 10 },
   medNombre: { fontSize: 15, fontWeight: "600", color: "#222" },
   medDetalle: { fontSize: 14, color: "#333", marginTop: 2 },

@@ -1,5 +1,17 @@
-// Cliente que habla DIRECTO con OpenRouter desde el celular (sin pasar por Render).
-// Cada usuario usa su propia clave gratuita de OpenRouter.
+// Cliente de IA de Numa.
+//
+// 1) MODO RÁPIDO (Gemini): primero se intenta el Worker de Cloudflare "numavision",
+//    que usa Gemini con una clave compartida escondida en el Worker. No necesita
+//    que el usuario tenga clave propia y responde en pocos segundos.
+// 2) RESPALDO (OpenRouter): si el Worker falla o tarda demasiado, se usa OpenRouter
+//    con la clave gratuita del usuario, como antes.
+
+// ⚠️ Pon aquí la URL de tu Worker de visión (la que te da Cloudflare al hacer Deploy)
+const VISION_WORKER_URL = "https://numavision.holasoyale4.workers.dev";
+// ⚠️ La misma palabra que pusiste como secreto APP_TOKEN en el Worker
+const VISION_WORKER_TOKEN = "numa-expo-2026-jiquipilco";
+
+const WORKER_TIMEOUT_MS = 25000;
 
 // Respaldo por si no se puede consultar la lista actual de OpenRouter.
 // Todos estos aceptan imágenes.
@@ -17,7 +29,35 @@ const TIMEOUT_MS = 45000;
 
 type ErrorIA = Error & { status?: number };
 
-// ---------- Descubrir modelos gratuitos que SÍ leen imágenes ----------
+// ---------- Modo rápido: Worker con Gemini ----------
+
+async function llamarWorker(ruta: "/receta" | "/clasificar", cuerpo: object): Promise<string> {
+  const controlador = new AbortController();
+  const temporizador = setTimeout(() => controlador.abort(), WORKER_TIMEOUT_MS);
+
+  try {
+    const respuesta = await fetch(`${VISION_WORKER_URL}${ruta}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Numa-Token": VISION_WORKER_TOKEN,
+      },
+      body: JSON.stringify(cuerpo),
+      signal: controlador.signal,
+    });
+
+    const datos = await respuesta.json().catch(() => null);
+    if (!respuesta.ok || !datos?.texto) {
+      throw new Error(`Worker (${respuesta.status}): ${datos?.error || "sin respuesta"}`);
+    }
+    console.log(`Gemini respondió con ${datos.modelo} en ${datos.ms} ms`);
+    return datos.texto;
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
+// ---------- Descubrir modelos gratuitos que SÍ leen imágenes (OpenRouter) ----------
 
 type ModeloInfo = {
   id: string;
@@ -148,6 +188,9 @@ async function llamarConModelos(apiKey: string, modelos: string[], messages: any
   );
 }
 
+const SIN_CLAVE =
+  "El modo rápido no respondió y no tienes clave de OpenRouter de respaldo. Revisa tu internet o agrega tu clave en Ajustes.";
+
 // ---------- Clasificar mensaje de texto ----------
 
 export type DatosEvento = {
@@ -159,7 +202,10 @@ export type DatosEvento = {
   detalle?: string;
 };
 
-export async function clasificarMensaje(texto: string, apiKey: string): Promise<DatosEvento> {
+export async function clasificarMensaje(
+  texto: string,
+  apiKey?: string | null
+): Promise<DatosEvento> {
   const fechaHoy = new Date().toISOString().slice(0, 10);
   const prompt = `Eres el clasificador de un bot personal de agenda llamado Numa. No eres doctor ni das consejo medico: solo organizas la informacion que la persona ya te da (agendar, recordar), sin opinar ni sugerir nada medico. Hoy es ${fechaHoy}.
 
@@ -178,9 +224,15 @@ Determina a cual de estas categorias pertenece y extrae los datos. Responde UNIC
 
 Si el mensaje no encaja en ninguna categoria util para el bot, usa "categoria": "otro".`;
 
-  const contenido = await llamarConModelos(apiKey, MODELOS_TEXTO, [
-    { role: "user", content: prompt },
-  ]);
+  let contenido: string | null = null;
+
+  try {
+    contenido = await llamarWorker("/clasificar", { prompt });
+  } catch (e: any) {
+    console.log("Modo rápido falló al clasificar, uso OpenRouter", e.message);
+    if (!apiKey) throw new Error(SIN_CLAVE);
+    contenido = await llamarConModelos(apiKey, MODELOS_TEXTO, [{ role: "user", content: prompt }]);
+  }
 
   const json = extraerJSON(contenido);
   if (!json) {
@@ -208,8 +260,7 @@ export type DatosReceta = {
   notas?: string;
 };
 
-export async function leerRecetaFoto(base64Image: string, apiKey: string): Promise<DatosReceta> {
-  const prompt = `Eres una herramienta de TRANSCRIPCION de documentos para un bot personal de recordatorios. NO eres doctor, NO das consejo medico, NO diagnosticas, y NO decides tratamientos. Tu unica funcion es transcribir con la mayor fidelidad posible lo que YA esta escrito en una receta que un doctor con licencia ya emitio.
+const PROMPT_RECETA = `Eres una herramienta de TRANSCRIPCION de documentos para un bot personal de recordatorios. NO eres doctor, NO das consejo medico, NO diagnosticas, y NO decides tratamientos. Tu unica funcion es transcribir con la mayor fidelidad posible lo que YA esta escrito en una receta que un doctor con licencia ya emitio.
 
 Primero determina si la imagen es una RECETA MEDICA (documento, manuscrito o impreso, con medicamentos recetados por un doctor).
 
@@ -241,29 +292,43 @@ Responde UNICAMENTE con un JSON valido, con esta forma exacta:
 
 Si "es_receta" es false, deja "medicamentos" como un arreglo vacio.`;
 
-  const modelosVision = await obtenerModelosVision();
+export async function leerRecetaFoto(
+  base64Image: string,
+  apiKey?: string | null
+): Promise<DatosReceta> {
+  let contenido: string | null = null;
 
-  const contenido = await llamarConModelos(apiKey, modelosVision, [
-    {
-      role: "user",
-      content: [
-        { type: "text", text: prompt },
-        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
-      ],
-    },
-  ]);
+  try {
+    contenido = await llamarWorker("/receta", {
+      prompt: PROMPT_RECETA,
+      imagen: base64Image,
+      mime: "image/jpeg",
+    });
+  } catch (e: any) {
+    console.log("Modo rápido falló al leer la receta, uso OpenRouter", e.message);
+    if (!apiKey) throw new Error(SIN_CLAVE);
+    const modelosVision = await obtenerModelosVision();
+    contenido = await llamarConModelos(apiKey, modelosVision, [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: PROMPT_RECETA },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
+        ],
+      },
+    ]);
+  }
 
   const json = extraerJSON(contenido);
   if (!json) {
     return { es_receta: false, medicamentos: [], notas: "No se pudo interpretar la imagen." };
   }
 
-  if (json.medicamentos && Array.isArray(json.medicamentos)) {
-    for (const m of json.medicamentos) {
-      if (!Array.isArray(m.campos_inciertos)) m.campos_inciertos = [];
-      const frecuenciaIncierta = m.campos_inciertos.includes("frecuencia_horas");
-      if (!m.frecuencia_horas && !frecuenciaIncierta) m.frecuencia_horas = 24;
-    }
+  if (!Array.isArray(json.medicamentos)) json.medicamentos = [];
+  for (const m of json.medicamentos) {
+    if (!Array.isArray(m.campos_inciertos)) m.campos_inciertos = [];
+    const frecuenciaIncierta = m.campos_inciertos.includes("frecuencia_horas");
+    if (!m.frecuencia_horas && !frecuenciaIncierta) m.frecuencia_horas = 24;
   }
 
   return json;
